@@ -48,71 +48,6 @@ def parse_args():
 # Begin interface info and manipulation
 ########################################
 
-def get_mon_iface(args):
-    global monitor_on
-    monitors, interfaces = iwconfig()
-    if args.interface:
-        monitor_on = True
-        return args.interface
-    if len(monitors) > 0:
-        monitor_on = True
-        return monitors[0]
-    else:
-        # Start monitor mode on a wireless interface
-        print '['+G+'*'+W+'] Finding the most powerful interface...'
-        interface = get_iface(interfaces)
-        monmode = start_mon_mode(interface)
-        return monmode
-
-def iwconfig():
-    monitors = []
-    interfaces = {}
-    try:
-        proc = Popen(['iwconfig'], stdout=PIPE, stderr=DN)
-    except OSError:
-        sys.exit('['+R+'-'+W+'] Could not execute "iwconfig"')
-    for line in proc.communicate()[0].split('\n'):
-        if len(line) == 0: continue # Isn't an empty string
-        if line[0] != ' ': # Doesn't start with space
-            wired_search = re.search('eth[0-9]|em[0-9]|p[1-9]p[1-9]', line)
-            if not wired_search: # Isn't wired
-                iface = line[:line.find(' ')] # is the interface
-                if 'Mode:Monitor' in line:
-                    monitors.append(iface)
-                elif 'IEEE 802.11' in line:
-                    if "ESSID:\"" in line:
-                        interfaces[iface] = 1
-                    else:
-                        interfaces[iface] = 0
-    return monitors, interfaces
-
-def get_iface(interfaces):
-    scanned_aps = []
-
-    if len(interfaces) < 1:
-        sys.exit('['+R+'-'+W+'] No wireless interfaces found, bring one up and try again')
-    if len(interfaces) == 1:
-        for interface in interfaces:
-            return interface
-
-    # Find most powerful interface
-    for iface in interfaces:
-        count = 0
-        proc = Popen(['iwlist', iface, 'scan'], stdout=PIPE, stderr=DN)
-        for line in proc.communicate()[0].split('\n'):
-            if ' - Address:' in line: # first line in iwlist scan for a new AP
-               count += 1
-        scanned_aps.append((count, iface))
-        print '['+G+'+'+W+'] Networks discovered by '+G+iface+W+': '+T+str(count)+W
-    try:
-        interface = max(scanned_aps)[1]
-        return interface
-    except Exception as e:
-        for iface in interfaces:
-            interface = iface
-            print '['+R+'-'+W+'] Minor error:',e
-            print '    Starting monitor mode on '+G+interface+W
-            return interface
 
 def start_mon_mode(interface):
     print '['+G+'+'+W+'] Starting monitor mode off '+G+interface+W
@@ -379,7 +314,7 @@ if __name__ == "__main__":
     lock = Lock()
     args = parse_args()
     monitor_on = None
-    mon_iface = get_mon_iface(args)
+    mon_iface = "wlan1"
     conf.iface = mon_iface
     mon_MAC = mon_mac(mon_iface)
     first_pass = 1
@@ -392,7 +327,9 @@ if __name__ == "__main__":
     signal(SIGINT, stop)
 
     try:
-       sniff(iface=mon_iface, store=0, prn=cb)
+
+        sniff(iface=mon_iface, store=0, prn=cb)
+
     except Exception as msg:
         remove_mon_iface(mon_iface)
         print '\n['+R+'!'+W+'] Closing'
